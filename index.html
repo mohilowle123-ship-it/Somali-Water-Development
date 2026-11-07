@@ -191,6 +191,42 @@ function getCustomerRate(c){
  // Generation billing uses one fixed tariff for every customer and Zone.
  return SWD_GENERATION_RATE;
 }
+
+// One-time tariff correction for existing unpaid bills.
+// Re-rates active bill-history entries at $1.70/m³, preserves cancelled bills,
+// preserves all recorded payments, and retains any legacy billed amount not
+// represented in billHistory rather than guessing how it was calculated.
+function migrateOutstandingBillsTo170(){
+ const marker='swdRate170OutstandingMigrationV1';
+ let changed=0;
+ (Array.isArray(customers)?customers:[]).forEach(c=>{
+   if(!c || c[marker]) return;
+   const history=Array.isArray(c.billHistory)?c.billHistory:[];
+   let oldActiveTotal=0,newActiveTotal=0,updated=0;
+   history.forEach(b=>{
+     if(!b || b.cancelled) return;
+     const diff=Number(b.difference);
+     const derived=(b.ad!==undefined&&b.ah!==undefined)?Number(b.ad)-Number(b.ah):NaN;
+     const m3=Number.isFinite(diff)&&diff>=0?diff:derived;
+     if(!Number.isFinite(m3)||m3<0) return;
+     oldActiveTotal+=Number(b.billed)||0;
+     const corrected=billMoney(m3*SWD_GENERATION_RATE);
+     b.rate=SWD_GENERATION_RATE;
+     b.billed=corrected;
+     newActiveTotal+=corrected;
+     updated++;
+   });
+   if(updated){
+     const legacyRemainder=Math.max(0,(Number(c.billed)||0)-oldActiveTotal);
+     c.billed=billMoney(legacyRemainder+newActiveTotal);
+     c.paid=billMoney(Number(c.paid)||0);
+     c.balance=billMoney(Math.max(0,c.billed-c.paid));
+     changed++;
+   }
+   c[marker]=true;
+ });
+ return changed;
+}
 function refreshZoneControls(){
  const fromCustomers=customers.map(getCustomerZone).filter(Boolean);
  const fromOriginal=(DATA.customers||[]).map(c=>clean(c.zone)).filter(Boolean);
@@ -535,11 +571,13 @@ let swdSupabase = null, swdUser = null, swdCloudTimer = null, swdHydrating = fal
      customers=(cr.data||[]).map(r=>r.customer_data).filter(Boolean);
      appointments=(ar.data||[]).map(r=>r.appointment_data).filter(Boolean);
      customers.sort((a,b)=>String(a.zone||'').localeCompare(String(b.zone||''),undefined,{numeric:true})||numericSort(a,b));
+     const migratedCount=migrateOutstandingBillsTo170();
      try{localStorage.setItem(KEY,JSON.stringify({customers,appointments}));localStorage.setItem('waterCollectorAppointmentsV2',JSON.stringify(appointments));}catch(e){}
      if(typeof setupZones==='function')setupZones();
      if(typeof refreshZoneControls==='function')refreshZoneControls();
      if(typeof drawAll==='function')drawAll();
      swdHydrating=false;
+     if(migratedCount>0) saveAll();
    }).catch(e=>{swdHydrating=false;throw e;});
  }
  function scheduleCloudSave(){
