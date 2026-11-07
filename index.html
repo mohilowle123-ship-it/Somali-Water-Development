@@ -103,16 +103,28 @@ function saveAll(){localStorage.setItem(KEY,JSON.stringify({customers,appointmen
 function tab(id){let target=document.querySelector('.tab[data-tab="'+id+'"]');if(target&&target.classList.contains('hidden'))return;document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===id));document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));if(id==='appointments')drawAppointments();if(id==='billed')drawBilled();if(id==='unbilled')drawUnbilled();if(id==='reports')drawReports();if(id==='cashreport')drawCashReport();if(id==='billcancel')drawBillCancellations();if(id==='collectors')drawCollectors();if(id==='billed')refreshZoneControls();if(id==='newbill'){refreshZoneControls();loadZoneBillRows();}}
 document.querySelectorAll('.tab[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 function card(t,v){return `<div class="card"><div class="muted">${t}</div><div class="num">${v}</div></div>`}
-function totals(){return customers.reduce((a,c)=>{a.billed+=n(c.billed);a.paid+=n(c.paid);a.balance+=n(c.balance);return a},{billed:0,paid:0,balance:0})}
+function generationUsageM3(c){
+ if(!c||c.unbilled)return 0;
+ const ah=(c.ah!==null&&c.ah!==undefined&&c.ah!=='' )?Number(c.ah):NaN;
+ const ad=(c.ad!==null&&c.ad!==undefined&&c.ad!=='' )?Number(c.ad):NaN;
+ const stored=Number(c.difference);
+ const diff=Number.isFinite(ah)&&Number.isFinite(ad)?ad-ah:stored;
+ return Number.isFinite(diff)&&diff>=0?diff:0;
+}
+function generationBillAmount(c){
+ return billMoney(generationUsageM3(c)*SWD_GENERATION_RATE);
+}
+function totals(){return customers.reduce((a,c)=>{a.billed+=generationBillAmount(c);a.paid+=n(c.paid);a.balance+=n(c.balance);return a},{billed:0,paid:0,balance:0})}
 function drawHome(){
  let zones=[...new Set(customers.map(c=>clean(c.zone)).filter(Boolean))],t=totals();
- let m3=customers.reduce((a,c)=>a+Math.max(0,n(c.difference)),0);
+ let m3=customers.reduce((a,c)=>a+generationUsageM3(c),0);
+ let generationTotal=customers.reduce((a,c)=>a+generationBillAmount(c),0);
  let created=customers.filter(c=>c.createdAt).length;
  let inactive=customers.filter(c=>c.unbilled||c.active===false).length;
  document.getElementById('stats').innerHTML=
  card('♙ User',collectors.length+1)+card('♙ Customer',customers.length)+card('⌖ Zone',zones.length)+
- card('▣ M3',fmt(m3))+card('▣ Cash',fmt(t.paid)+' $')+
- card('▤ Messages',0)+card('♙ Customer Created',created)+card('♙ InActive Customers',inactive)+card('▧ Pending Complains',0);
+ card('▣ M3',fmt(m3))+card('▣ Generation Total',fmt(generationTotal)+' $')+
+ card('▣ Cash',fmt(t.paid)+' $')+card('♙ Customer Created',created)+card('♙ InActive Customers',inactive)+card('▧ Pending Complains',0);
 }
 function refreshDashboard(){
  const errors=[];
@@ -409,7 +421,7 @@ function saveAppointment(){let sqn=clean(document.getElementById('aSqn').value),
 function drawAppointments(){let q=(document.getElementById('apptSearch')?.value||'').toLowerCase(),arr=appointments.map((a,i)=>({...a,index:i})).filter(a=>[a.sqn,a.name,a.zone,a.date].join(' ').toLowerCase().includes(q)).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));document.getElementById('apptBody').innerHTML=arr.map(a=>`<tr><td>${a.date}</td><td>${a.time}</td><td>${a.sqn}</td><td>${a.name}</td><td>${a.zone}</td><td>${a.note}</td><td><select onchange="changeStatus(${a.index},this.value)"><option ${a.status==='Sugaya'?'selected':''}>Sugaya</option><option ${a.status==='La qabtay'?'selected':''}>La qabtay</option><option ${a.status==='La baajiyey'?'selected':''}>La baajiyey</option></select></td><td><button class="smallbtn danger" onclick="deleteAppointment(${a.index})">Tirtir</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty">Weli ballan lama qorin.</td></tr>';}
 function changeStatus(i,v){appointments[i].status=v;saveAll();drawAppointments();drawHome();drawReports();}
 function deleteAppointment(i){if(confirm('Ma tirtiraysaa ballantan?')){appointments.splice(i,1);saveAll();drawAppointments();drawHome();drawReports();}}
-function drawReports(){let z={};customers.forEach(c=>{let k=c.zone||'Aan la cayimin';if(!z[k])z[k]={count:0,billed:0,paid:0,balance:0,unbilled:0};z[k].count++;z[k].billed+=n(c.billed);z[k].paid+=n(c.paid);z[k].balance+=n(c.balance);if(c.unbilled)z[k].unbilled++;});let t=totals();document.getElementById('reportStats').innerHTML=card('Wadarta macaamiisha',customers.length)+card('Billed',customers.filter(c=>!c.unbilled).length)+card('Unbilled',customers.filter(c=>c.unbilled).length)+card('Wadarta la dalacay',fmt(t.billed)+' $')+card('Wadarta la bixiyey',fmt(t.paid)+' $')+card('Wadarta haraaga',fmt(t.balance)+' $')+card('Ballamo sugaya',appointments.filter(a=>a.status==='Sugaya').length);document.getElementById('zoneReport').innerHTML=Object.entries(z).sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true})).map(([k,v])=>`<tr><td>${k}</td><td>${v.count}</td><td>${fmt(v.billed)} $</td><td>${fmt(v.paid)} $</td><td>${fmt(v.balance)} $</td><td>${v.unbilled}</td></tr>`).join('');}
+function drawReports(){let z={};customers.forEach(c=>{let k=c.zone||'Aan la cayimin';if(!z[k])z[k]={count:0,billed:0,paid:0,balance:0,unbilled:0};z[k].count++;z[k].billed+=generationBillAmount(c);z[k].paid+=n(c.paid);z[k].balance+=n(c.balance);if(c.unbilled)z[k].unbilled++;});let t=totals();document.getElementById('reportStats').innerHTML=card('Wadarta macaamiisha',customers.length)+card('Billed',customers.filter(c=>!c.unbilled).length)+card('Unbilled',customers.filter(c=>c.unbilled).length)+card('Wadarta la dalacay',fmt(t.billed)+' $')+card('Wadarta la bixiyey',fmt(t.paid)+' $')+card('Wadarta haraaga',fmt(t.balance)+' $')+card('Ballamo sugaya',appointments.filter(a=>a.status==='Sugaya').length);document.getElementById('zoneReport').innerHTML=Object.entries(z).sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true})).map(([k,v])=>`<tr><td>${k}</td><td>${v.count}</td><td>${fmt(v.billed)} $</td><td>${fmt(v.paid)} $</td><td>${fmt(v.balance)} $</td><td>${v.unbilled}</td></tr>`).join('');}
 function currentCollectorName(){
  const sel=document.getElementById('activeCollector');
  if(!sel||sel.value==='admin')return 'Maamule (Admin)';
