@@ -192,17 +192,21 @@ function getCustomerRate(c){
  return SWD_GENERATION_RATE;
 }
 
-// One-time tariff correction for existing unpaid bills.
-// Re-rates active bill-history entries at $1.70/m³, preserves cancelled bills,
-// preserves all recorded payments, and retains any legacy billed amount not
-// represented in billHistory rather than guessing how it was calculated.
+// Version 2 correction: older imported customer records often have no billHistory.
+// Their outstanding Generation charge is therefore recalculated from the saved
+// meter difference at the fixed $1.70/m³ tariff. Payments and cancelled records
+// are not changed; unbilled customers and records without a valid reading gap stay untouched.
 function migrateOutstandingBillsTo170(){
- const marker='swdRate170OutstandingMigrationV1';
+ const marker='swdRate170OutstandingMigrationV2';
  let changed=0;
  (Array.isArray(customers)?customers:[]).forEach(c=>{
    if(!c || c[marker]) return;
    const history=Array.isArray(c.billHistory)?c.billHistory:[];
-   let oldActiveTotal=0,newActiveTotal=0,updated=0;
+   if(c.unbilled){
+     c[marker]=true;
+     return;
+   }
+   let updatedHistory=false,oldActiveTotal=0,newActiveTotal=0;
    history.forEach(b=>{
      if(!b || b.cancelled) return;
      const diff=Number(b.difference);
@@ -214,16 +218,23 @@ function migrateOutstandingBillsTo170(){
      b.rate=SWD_GENERATION_RATE;
      b.billed=corrected;
      newActiveTotal+=corrected;
-     updated++;
+     updatedHistory=true;
    });
-   if(updated){
+   if(updatedHistory){
      const legacyRemainder=Math.max(0,(Number(c.billed)||0)-oldActiveTotal);
      c.billed=billMoney(legacyRemainder+newActiveTotal);
-     c.paid=billMoney(Number(c.paid)||0);
-     c.balance=billMoney(Math.max(0,c.billed-c.paid));
-     changed++;
+   }else{
+     const diff=Number(c.difference);
+     if(Number.isFinite(diff)&&diff>=0){
+       c.price=SWD_GENERATION_RATE;
+       c.billed=billMoney(diff*SWD_GENERATION_RATE);
+     }
    }
+   c.paid=billMoney(Number(c.paid)||0);
+   c.balance=billMoney(Math.max(0,(Number(c.billed)||0)-c.paid));
+   c.price=SWD_GENERATION_RATE;
    c[marker]=true;
+   changed++;
  });
  return changed;
 }
