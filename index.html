@@ -115,7 +115,7 @@ body[data-theme="dark"] .generation-row .gen-data .balance-zero{color:#cbd5e1}
  <div class="box collector-sheet-wrap">
   <div class="collector-report-head"><div><h2>COLLECTOR REPORT</h2><p>Warqadda akhriska iyo lacag ururinta macaamiisha</p></div><div class="collector-report-rate">RATE: $1.70 / M³</div></div>
   <div class="toolbar no-print"><label>Dooro Zone <select id="collectorReportZone" onchange="drawCollectorReport()"><option value="">Dhammaan Zone-yada</option></select></label><input id="collectorReportSearch" placeholder="Raadi SQN ama magaca..." oninput="drawCollectorReport()"><button class="primary" onclick="window.print()">Daabac Report</button><button onclick="downloadCollectorReport()">Soo dejiso CSV</button></div>
-  <div class="collector-report-note">AH = Akhriskii hore · AD = Akhriska cusub · HH = Haraaga hore ee app-ka. Geli AD; lacagta cusub = (AD − AH) × $1.70. Haraaga cusub = HH − lacagta cusub.</div>
+  <div class="collector-report-note">AH = Akhriskii hore · AD = Akhriska cusub · HH = Haraaga hore ee app-ka. Geli AD; lacagta cusub = (AD − AH) × $1.70. Haraaga cusub = HH + lacagta cusub (HH taban wuxuu ka go'ayaa lacagta cusub).</div>
   <div class="tablewrap collector-report-table"><table><thead><tr><th>#</th><th>SQN</th><th>Magaca Macmiilka</th><th>Address</th><th>AH</th><th>AD</th><th>Rate</th><th>HH ($)</th><th>Lacagta ($)</th><th>Haraaga cusub ($)</th><th>Saxiix</th></tr></thead><tbody id="collectorReportBody"></tbody></table></div>
   <div class="collector-report-footer"><span>Magaca Collector: __________________________</span><span>Taariikh: __________________</span><span>Saxiix: __________________</span></div>
  </div>
@@ -205,7 +205,7 @@ function drawCollectorReport(){
  const body=document.getElementById('collectorReportBody');if(!body)return;
  const zone=document.getElementById('collectorReportZone')?.value||'';const q=(document.getElementById('collectorReportSearch')?.value||'').toLowerCase().trim();
  const list=customers.filter(c=>(!zone||clean(c.zone)===zone)&&[c.SQN,c.name,c.address].join(' ').toLowerCase().includes(q)).sort((a,b)=>numericSort(a,b));
- body.innerHTML=list.map((c,i)=>{const ah=getPreviousReading(c),hh=hhValue(c);return `<tr data-sqn="${clean(c.SQN)}"><td>${i+1}</td><td>${clean(c.SQN)}</td><td>${clean(c.name)}</td><td>${clean(c.address)}</td><td class="cr-ah">${ah===''?'—':fmt(ah)}</td><td><input class="cr-ad cr-blank" type="number" min="0" step="0.01" inputmode="decimal" aria-label="AD cusub ${clean(c.SQN)}" placeholder="Geli AD" oninput="calculateCollectorRow(this)"></td><td class="cr-rate">$1.70</td><td class="cr-hh" data-value="${hh===null||hh===undefined||hh===''?'':Number(hh)}">${hh===null||hh===undefined||hh===''?'—':fmt(hh)}</td><td><input class="cr-money" type="text" value="—" readonly aria-label="Lacagta cusub si automatic ah loo xisaabiyey"></td><td><input class="cr-balance cr-money" type="text" value="—" readonly aria-label="Haraaga cusub HH laga jaray lacagta cusub"></td><td></td></tr>`;}).join('')||'<tr><td colspan="11" class="empty">Macmiil lama helin.</td></tr>';
+ body.innerHTML=list.map((c,i)=>{const ah=getPreviousReading(c),hh=hhValue(c);return `<tr data-sqn="${clean(c.SQN)}"><td>${i+1}</td><td>${clean(c.SQN)}</td><td>${clean(c.name)}</td><td>${clean(c.address)}</td><td class="cr-ah">${ah===''?'—':fmt(ah)}</td><td><input class="cr-ad cr-blank" type="number" min="0" step="0.01" inputmode="decimal" aria-label="AD cusub ${clean(c.SQN)}" placeholder="Geli AD" oninput="calculateCollectorRow(this)"></td><td class="cr-rate">$1.70</td><td class="cr-hh" data-value="${hh===null||hh===undefined||hh===''?'':Number(hh)}">${hh===null||hh===undefined||hh===''?'—':fmt(hh)}</td><td><input class="cr-money" type="text" value="—" readonly aria-label="Lacagta cusub si automatic ah loo xisaabiyey"></td><td><input class="cr-balance cr-money" type="text" value="—" readonly aria-label="Haraaga cusub HH iyo lacagta cusub la isku daray"></td><td></td></tr>`;}).join('')||'<tr><td colspan="11" class="empty">Macmiil lama helin.</td></tr>';
 }
 function calculateCollectorRow(input){
  const row=input.closest('tr');if(!row)return;
@@ -223,7 +223,7 @@ function calculateCollectorRow(input){
  if(hhRaw===''){amount.value=((ad-ah)*1.70).toFixed(2)+' $';balance.value='HH maqan';balance.classList.add('cr-invalid');return;}
  const hh=Number(hhRaw),newCharge=(ad-ah)*1.70;
  amount.value=newCharge.toFixed(2)+' $';
- balance.value=(hh-newCharge).toFixed(2)+' $';
+ balance.value=(hh+newCharge).toFixed(2)+' $';
 }
 
 function downloadCollectorReport(){
