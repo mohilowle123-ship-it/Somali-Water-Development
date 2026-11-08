@@ -115,8 +115,8 @@ body[data-theme="dark"] .generation-row .gen-data .balance-zero{color:#cbd5e1}
  <div class="box collector-sheet-wrap">
   <div class="collector-report-head"><div><h2>COLLECTOR REPORT</h2><p>Warqadda akhriska iyo lacag ururinta macaamiisha</p></div><div class="collector-report-rate">RATE: $1.70 / M³</div></div>
   <div class="toolbar no-print"><label>Dooro Zone <select id="collectorReportZone" onchange="drawCollectorReport()"><option value="">Dhammaan Zone-yada</option></select></label><input id="collectorReportSearch" placeholder="Raadi SQN ama magaca..." oninput="drawCollectorReport()"><button class="primary" onclick="window.print()">Daabac Report</button><button onclick="downloadCollectorReport()">Soo dejiso CSV</button></div>
-  <div class="collector-report-note">AH = Akhriskii hore · AD = Akhriska cusub · Rate = $1.70 halkii M³. Geli AD; lacagta si automatic ah ayaa loo xisaabinayaa: (AD − AH) × $1.70. Haraaga gacanta ku qor.</div>
-  <div class="tablewrap collector-report-table"><table><thead><tr><th>#</th><th>SQN</th><th>Magaca Macmiilka</th><th>Address</th><th>AH</th><th>AD</th><th>Rate</th><th>Lacagta ($)</th><th>Haraaga ($)</th><th>Saxiix</th></tr></thead><tbody id="collectorReportBody"></tbody></table></div>
+  <div class="collector-report-note">AH = Akhriskii hore · AD = Akhriska cusub · HH = Haraaga hore ee app-ka. Geli AD; lacagta cusub = (AD − AH) × $1.70. Haraaga cusub = HH − lacagta cusub.</div>
+  <div class="tablewrap collector-report-table"><table><thead><tr><th>#</th><th>SQN</th><th>Magaca Macmiilka</th><th>Address</th><th>AH</th><th>AD</th><th>Rate</th><th>HH ($)</th><th>Lacagta ($)</th><th>Haraaga cusub ($)</th><th>Saxiix</th></tr></thead><tbody id="collectorReportBody"></tbody></table></div>
   <div class="collector-report-footer"><span>Magaca Collector: __________________________</span><span>Taariikh: __________________</span><span>Saxiix: __________________</span></div>
  </div>
 </section>
@@ -205,25 +205,33 @@ function drawCollectorReport(){
  const body=document.getElementById('collectorReportBody');if(!body)return;
  const zone=document.getElementById('collectorReportZone')?.value||'';const q=(document.getElementById('collectorReportSearch')?.value||'').toLowerCase().trim();
  const list=customers.filter(c=>(!zone||clean(c.zone)===zone)&&[c.SQN,c.name,c.address].join(' ').toLowerCase().includes(q)).sort((a,b)=>numericSort(a,b));
- body.innerHTML=list.map((c,i)=>{const ah=getPreviousReading(c);return `<tr data-sqn="${clean(c.SQN)}"><td>${i+1}</td><td>${clean(c.SQN)}</td><td>${clean(c.name)}</td><td>${clean(c.address)}</td><td class="cr-ah">${ah===''?'—':fmt(ah)}</td><td><input class="cr-ad cr-blank" type="number" min="0" step="0.01" inputmode="decimal" aria-label="AD cusub ${clean(c.SQN)}" placeholder="Geli AD" oninput="calculateCollectorRow(this)"></td><td class="cr-rate">$1.70</td><td><input class="cr-money" type="text" value="—" readonly aria-label="Lacagta si automatic ah loo xisaabiyey"></td><td><input class="cr-blank" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Haraaga"></td><td></td></tr>`;}).join('')||'<tr><td colspan="10" class="empty">Macmiil lama helin.</td></tr>';
+ body.innerHTML=list.map((c,i)=>{const ah=getPreviousReading(c),hh=hhValue(c);return `<tr data-sqn="${clean(c.SQN)}"><td>${i+1}</td><td>${clean(c.SQN)}</td><td>${clean(c.name)}</td><td>${clean(c.address)}</td><td class="cr-ah">${ah===''?'—':fmt(ah)}</td><td><input class="cr-ad cr-blank" type="number" min="0" step="0.01" inputmode="decimal" aria-label="AD cusub ${clean(c.SQN)}" placeholder="Geli AD" oninput="calculateCollectorRow(this)"></td><td class="cr-rate">$1.70</td><td class="cr-hh" data-value="${hh===null||hh===undefined||hh===''?'':Number(hh)}">${hh===null||hh===undefined||hh===''?'—':fmt(hh)}</td><td><input class="cr-money" type="text" value="—" readonly aria-label="Lacagta cusub si automatic ah loo xisaabiyey"></td><td><input class="cr-balance cr-money" type="text" value="—" readonly aria-label="Haraaga cusub HH laga jaray lacagta cusub"></td><td></td></tr>`;}).join('')||'<tr><td colspan="11" class="empty">Macmiil lama helin.</td></tr>';
 }
 function calculateCollectorRow(input){
  const row=input.closest('tr');if(!row)return;
  const ahText=row.querySelector('.cr-ah')?.textContent.trim()||'';
  const amount=row.querySelector('.cr-money');
+ const balance=row.querySelector('.cr-balance');
+ const hhCell=row.querySelector('.cr-hh');
  const raw=input.value.trim();
- amount.classList.remove('cr-invalid');
- if(!raw){amount.value='';return;}
- if(ahText==='—'){amount.value='AH maqan';amount.classList.add('cr-invalid');return;}
+ amount.classList.remove('cr-invalid');balance.classList.remove('cr-invalid');
+ if(!raw){amount.value='—';balance.value='—';return;}
+ if(ahText==='—'){amount.value='AH maqan';balance.value='—';amount.classList.add('cr-invalid');return;}
  const ah=Number(ahText.replace(/,/g,'')),ad=Number(raw);
- if(!Number.isFinite(ah)||!Number.isFinite(ad)||ad<ah){amount.value='AD < AH';amount.classList.add('cr-invalid');return;}
- amount.value=((ad-ah)*1.70).toFixed(2)+' $';
+ if(!Number.isFinite(ah)||!Number.isFinite(ad)||ad<ah){amount.value='AD < AH';balance.value='—';amount.classList.add('cr-invalid');return;}
+ const hhRaw=hhCell?.dataset.value??'';
+ if(hhRaw===''){amount.value=((ad-ah)*1.70).toFixed(2)+' $';balance.value='HH maqan';balance.classList.add('cr-invalid');return;}
+ const hh=Number(hhRaw),newCharge=(ad-ah)*1.70;
+ amount.value=newCharge.toFixed(2)+' $';
+ balance.value=(hh-newCharge).toFixed(2)+' $';
 }
+
 function downloadCollectorReport(){
- const zone=document.getElementById('collectorReportZone')?.value||'';const q=(document.getElementById('collectorReportSearch')?.value||'').toLowerCase().trim();
- const list=customers.filter(c=>(!zone||clean(c.zone)===zone)&&[c.SQN,c.name,c.address].join(' ').toLowerCase().includes(q)).sort((a,b)=>numericSort(a,b));
- const rows=[...document.querySelectorAll('#collectorReportBody tr[data-sqn]')];csv(rows.map((tr,i)=>({'#':i+1,'SQN':tr.dataset.sqn,'Magaca':tr.children[2].textContent,'Address':tr.children[3].textContent,'AH':tr.querySelector('.cr-ah').textContent,'AD':tr.querySelector('.cr-ad').value,'Rate':'1.70','Lacagta':tr.querySelector('.cr-money').value,'Haraaga':tr.children[8].querySelector('input').value,'Saxiix':''})),'collector-report'+(zone?'-'+zone:'')+'.csv');
+ const zone=document.getElementById('collectorReportZone')?.value||'';
+ const rows=[...document.querySelectorAll('#collectorReportBody tr[data-sqn]')];
+ csv(rows.map((tr,i)=>({'#':i+1,'SQN':tr.dataset.sqn,'Magaca':tr.children[2].textContent,'Address':tr.children[3].textContent,'AH':tr.querySelector('.cr-ah').textContent,'AD':tr.querySelector('.cr-ad').value,'Rate':'1.70','HH':tr.querySelector('.cr-hh').textContent,'Lacagta cusub':tr.querySelectorAll('.cr-money')[0].value,'Haraaga cusub':tr.querySelector('.cr-balance').value,'Saxiix':''})),'collector-report'+(zone?'-'+zone:'')+'.csv');
 }
+
 function setupZones(){let z=[...new Set(customers.map(c=>clean(c.zone)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));document.getElementById('zone').innerHTML='<option value="">Dhammaan Zone-yada</option>'+z.map(x=>`<option>${x}</option>`).join('');const zoneListEl=document.getElementById('zoneList');if(zoneListEl)zoneListEl.innerHTML=z.map(x=>`<option value="${x}">`).join('');document.getElementById('sqnList').innerHTML=customers.map(c=>`<option value="${clean(c.SQN)}">${clean(c.name)}</option>`).join('');}
 function phoneLinks(c){let tel=clean(c.tel).replace(/[^\d+]/g,''),wa=tel.replace(/\D/g,''),msg=encodeURIComponent('Salaan '+clean(c.name)+', waxaan kula soo xiriirayaa adeegga biyaha.');return `<div class="actions"><a class="call" href="tel:${tel}">☎ Wac</a><a class="sms" href="sms:${tel}?body=${msg}">✉ SMS</a><a class="wa" target="_blank" rel="noopener" href="https://wa.me/${wa}?text=${msg}">WhatsApp</a><button class="appt smallbtn" onclick="openAppointment('${clean(c.SQN)}')">＋ Ballan</button></div>`;}
 function drawCustomers(){customers.forEach(syncCustomerBalance);let q=document.getElementById('search').value.toLowerCase(),z=document.getElementById('zone').value,st=document.getElementById('status').value;let list=customers.filter(c=>(!z||clean(c.zone)===z)&&[c.SQN,c.name,c.address,c.tel,c.zone].join(' ').toLowerCase().includes(q)&&(!st||(st==='debt'&&n(c.balance)>0)||(st==='paid'&&n(c.balance)<=0&&!c.unbilled)||(st==='unbilled'&&c.unbilled)));let groups={};list.forEach(c=>(groups[clean(c.zone)||'Zone aan la cayimin']??=[]).push(c));let html='<div class="notice"><b>Generation Rate: $1.70 halkii mitir kuub (m³)</b> — Lacagta isticmaalka = Farqiga × 1.70. Resto = lacag lagugu leeyahay; Meenis = lacag dheeraad ah.</div>';Object.keys(groups).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).forEach(zone=>{html+=`<div class="zonehead"><span>ZONE: ${zone}</span><span>${groups[zone].length} macmiil</span></div>`;groups[zone].sort(numericSort).forEach(c=>{let diff=(c.ah!==null&&c.ah!==undefined&&c.ad!==null&&c.ad!==undefined)?Math.max(0,Number(c.ad)-Number(c.ah)):Number(c.difference)||0;let bal=syncCustomerBalance(c),resto=Math.max(0,bal),meenis=Math.max(0,-bal),hh=Number(hhValue(c))||0,wg=billMoney(resto+hh);html+=`<article class="cust generation-row"><div class="generation-header"><div class="who"><strong>SQN ${clean(c.SQN)} — ${clean(c.name)}</strong><span class="muted">${clean(c.address)} · Tel: ${clean(c.tel)||'Lama hayo'} ${c.unbilled?'<span class="badge">UNBILLED</span>':''}</span></div><div class="actions"><button class="primary smallbtn" onclick="editCustomer('${clean(c.SQN)}')">Wax ka beddel</button><button class="smallbtn" onclick="openPay('${clean(c.SQN)}')">Lacag bixi</button></div>${phoneLinks(c)}</div><div class="gen-metrics"><div class="gen-data"><span class="muted">AH / AD</span><b>${fmt(c.ah)} / ${fmt(c.ad)}</b></div><div class="gen-data"><span class="muted">Farqi (m³)</span><b>${fmt(diff)} m³</b></div><div class="gen-data"><span class="muted">Rate</span><b>$1.70 / m³</b></div><div class="gen-data"><span class="muted">Dalac guud</span><b>$${money2(c.billed)}</b></div><div class="gen-data"><span class="muted">La bixiyey</span><b>$${money2(c.paid)}</b></div><div class="gen-data"><span class="muted">Resto (lagugu leeyahay)</span><b class="${resto>0?'balance-resto':'balance-zero'}">$${money2(resto)}</b></div><div class="gen-data"><span class="muted">HH (Excel)</span><b>${hhText(c)}</b></div><div class="gen-data"><span class="muted">WG (Wadarta Guud)</span><b>${fmt(wg)}</b></div></div></article>`;});});document.getElementById('customerList').innerHTML=html||'<div class="empty">Macmiil lama helin.</div>'; }
