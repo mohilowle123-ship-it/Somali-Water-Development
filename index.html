@@ -677,7 +677,7 @@ let swdSupabase = null, swdUser = null, swdCloudTimer = null, swdHydrating = fal
  css.textContent='#swdGate{position:fixed;inset:0;background:#f2f5f9;z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;font-family:Arial}#swdGate .sg{background:white;border:1px solid #dbe3ec;border-radius:16px;padding:26px;width:min(440px,100%);box-shadow:0 12px 40px #10243a22}#swdGate input{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;margin:7px 0 14px;font-size:15px}#swdGate button{background:#1769aa;color:white;padding:12px 16px;border:0;border-radius:8px;font-weight:bold;width:100%}#swdMsg{color:#a11;margin-top:12px;white-space:pre-wrap}';
  document.head.appendChild(css);
  const gate=document.createElement('div');gate.id='swdGate';
- gate.innerHTML='<div class="sg"><h2 style="margin-top:0;color:#10243a">SOMALI WATER DEVELOPMENT</h2><p>Geli username-kaaga iyo password-kaaga. Akoonkii hore email-kiisa sidoo kale wuu shaqaynayaa.</p><label>Username ama Email</label><input id="swdEmail" type="text" autocomplete="username" placeholder="Username-kaaga"><label>Password</label><input id="swdPassword" type="password" autocomplete="current-password" placeholder="Password-kaaga"><button id="swdLogin">GAL APP-KA</button><div id="swdMsg"></div></div>';
+ gate.innerHTML='<div class="sg"><h2 style="margin-top:0;color:#10243a">SOMALI WATER DEVELOPMENT</h2><p>Ku gal username ama email iyo password si aad u furato xogtaada online-ka.</p><label>Username ama Email</label><input id="swdEmail" type="text" autocomplete="username" placeholder="Username-kaaga ama email-kaaga"><label>Password</label><input id="swdPassword" type="password" autocomplete="current-password" placeholder="Password-kaaga"><button id="swdLogin">GAL APP-KA</button><div id="swdMsg"></div></div>';
  document.body.appendChild(gate);
  const setMsg=t=>document.getElementById('swdMsg').textContent=t||'';
  function loadCloud(){
@@ -749,15 +749,19 @@ let swdSupabase = null, swdUser = null, swdCloudTimer = null, swdHydrating = fal
    alert('Waa lagu guuleystay. '+add.length+' macaamiil ayaa cloud-ka lagu daray.');
  }
  async function login(){
-   const loginName=document.getElementById('swdEmail').value.trim();
+   const identifier=document.getElementById('swdEmail').value.trim();
    const password=document.getElementById('swdPassword').value;
-   if(!loginName||!password){setMsg('Geli username iyo password.');return;}
-   // Existing owner can continue using the original email. New username accounts
-   // use an internal, non-mailbox alias that is created in Supabase Auth.
-   let email=loginName;
-   if(!loginName.includes('@')){
-     if(!/^[a-zA-Z0-9._-]{3,32}$/.test(loginName)){setMsg('Username-ku ha noqdo 3–32 xaraf: English, tiro, dhibic, _ ama -.');return;}
-     email=loginName.toLowerCase()+'@login.swd.local';
+   if(!identifier||!password){setMsg('Geli username ama email iyo password.');return;}
+   // Existing email accounts continue to work. A username is mapped to its
+   // dedicated internal Supabase Auth alias; create that Auth user with the
+   // same alias when provisioning a username-only account.
+   let email=identifier;
+   if(!identifier.includes('@')){
+     const username=identifier.toLowerCase();
+     if(!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)){
+       setMsg('Username-ku waa inuu ka koobnaadaa 3 ilaa 32 xaraf: a-z, 0-9, dhibic, _ ama -.');return;
+     }
+     email=username+'@swd-login.invalid';
    }
    const btn=document.getElementById('swdLogin');btn.disabled=true;btn.textContent='WAA LA GELAYAA...';setMsg('');
    try{
@@ -773,7 +777,7 @@ let swdSupabase = null, swdUser = null, swdCloudTimer = null, swdHydrating = fal
      await loadCloud();
      gate.remove();
      const bar=document.createElement('div');bar.style='position:fixed;right:12px;bottom:12px;z-index:9999;background:#10243a;color:white;padding:8px 12px;border-radius:9px;font-size:12px';
-     bar.innerHTML='ONLINE: '+String(profile.display_name||loginName).replace(/[<>&"]/g,'')+' <button id="swdBackupBtn" style="margin-left:8px;background:#1769aa;color:white;border:0;border-radius:6px;padding:6px">Soo geli Backup-ka</button><button id="swdSyncBtn" style="margin-left:5px;background:#1769aa;color:white;border:0;border-radius:6px;padding:6px">Sync</button><input id="swdBackupFile" type="file" accept=".json,application/json" hidden>';
+     bar.innerHTML='ONLINE: '+String(profile.display_name||identifier).replace(/[<>&"]/g,'')+' <button id="swdBackupBtn" style="margin-left:8px;background:#1769aa;color:white;border:0;border-radius:6px;padding:6px">Soo geli Backup-ka</button><button id="swdSyncBtn" style="margin-left:5px;background:#1769aa;color:white;border:0;border-radius:6px;padding:6px">Sync</button><input id="swdBackupFile" type="file" accept=".json,application/json" hidden>';
      document.body.appendChild(bar);
      document.getElementById('swdBackupBtn').onclick=()=>document.getElementById('swdBackupFile').click();
      document.getElementById('swdBackupFile').onchange=async ev=>{const f=ev.target.files[0];if(!f)return;try{await importBackup(f);}catch(e){alert('Backup lama gelin: '+(e.message||e));}finally{ev.target.value='';}};
