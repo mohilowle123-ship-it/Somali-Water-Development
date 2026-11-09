@@ -758,10 +758,37 @@ let swdSupabase = null, swdUser = null, swdCloudTimer = null, swdHydrating = fal
      if(!profile||profile.active===false)throw new Error('Akoonka waa dansan yahay. La xiriir maamulka.');
      await loadCloud();
      gate.remove();
-     const bar=document.createElement('div');bar.style='position:static;z-index:20;background:#10243a;color:white;padding:7px 10px;border-radius:9px;font-size:12px;max-width:100%;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:5px;margin-left:auto;flex:0 1 auto';
+     const bar=document.createElement('div');bar.style='position:fixed;right:12px;top:12px;bottom:auto;z-index:9999;background:#10243a;color:white;padding:8px 12px;border-radius:9px;font-size:12px;max-width:calc(100vw - 24px);display:flex;align-items:center;flex-wrap:wrap;gap:5px';
      bar.innerHTML='ONLINE: '+String(profile.display_name||email).replace(/[<>&"]/g,'')+' <button id="swdBackupBtn" style="margin-left:8px;background:#1769aa;color:white;border:0;border-radius:6px;padding:6px">Soo geli Backup-ka</button><button id="swdSyncBtn" style="margin-left:5px;background:#1769aa;color:white;border:0;border-radius:6px;padding:6px">Sync</button><input id="swdBackupFile" type="file" accept=".json,application/json" hidden>';
-     const tabsNav=document.querySelector('nav.tabs');
-     if(tabsNav){tabsNav.appendChild(bar);}else{document.body.appendChild(bar);}
+     if(String(profile.role||'').toLowerCase()==='superadmin'){
+       const adminBtn=document.createElement('button');adminBtn.id='swdCreateUserBtn';adminBtn.textContent='Abuur User Cusub';adminBtn.style='margin-left:5px;background:#087f5b;color:white;border:0;border-radius:6px;padding:6px';bar.appendChild(adminBtn);
+       adminBtn.onclick=()=>{
+         if(document.getElementById('swdCreateUserModal'))return;
+         const modal=document.createElement('div');modal.id='swdCreateUserModal';modal.style='position:fixed;inset:0;z-index:100000;background:#10243a88;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Arial';
+         modal.innerHTML='<div style="background:white;color:#10243a;padding:22px;border-radius:14px;width:min(420px,100%);box-shadow:0 12px 40px #0003"><h3 style="margin-top:0">Abuur User Cusub</h3><p style="font-size:13px">Qofkan wuxuu yeelanayaa xog u gaar ah oo ka go\'an xogtaada.</p><label>Magaca qofka</label><input id="swdNewDisplayName" type="text" autocomplete="off" style="box-sizing:border-box;width:100%;padding:11px;margin:6px 0 12px;border:1px solid #cbd5e1;border-radius:7px"><label>Username</label><input id="swdNewUsername" type="text" autocomplete="off" placeholder="tusaale: axmed01" style="box-sizing:border-box;width:100%;padding:11px;margin:6px 0 12px;border:1px solid #cbd5e1;border-radius:7px"><label>Password (ugu yaraan 8 xaraf)</label><input id="swdNewPassword" type="password" autocomplete="new-password" style="box-sizing:border-box;width:100%;padding:11px;margin:6px 0 12px;border:1px solid #cbd5e1;border-radius:7px"><div id="swdNewUserMsg" style="font-size:13px;white-space:pre-wrap;margin:8px 0;color:#a11"></div><div style="display:flex;gap:8px"><button id="swdSaveNewUser" style="flex:1;background:#087f5b;color:white;border:0;border-radius:7px;padding:11px;font-weight:bold">SAMEE USER</button><button id="swdCancelNewUser" style="background:#64748b;color:white;border:0;border-radius:7px;padding:11px">XIR</button></div></div>';
+         document.body.appendChild(modal);
+         document.getElementById('swdCancelNewUser').onclick=()=>modal.remove();
+         document.getElementById('swdSaveNewUser').onclick=async()=>{
+           const display_name=document.getElementById('swdNewDisplayName').value.trim();
+           const username=document.getElementById('swdNewUsername').value.trim().toLowerCase();
+           const password=document.getElementById('swdNewPassword').value;
+           const msg=document.getElementById('swdNewUserMsg'),save=document.getElementById('swdSaveNewUser');
+           if(!display_name||!username||!password){msg.textContent='Buuxi magaca, username-ka iyo password-ka.';return;}
+           if(!/^[a-z0-9._-]{3,32}$/.test(username)){msg.textContent='Username-ku ha noqdo 3–32 xaraf: a-z, 0-9, dhibic, _ ama -.';return;}
+           if(password.length<8){msg.textContent='Password-ku waa inuu ugu yaraan 8 xaraf ahaadaa.';return;}
+           save.disabled=true;save.textContent='WAA LA ABUURAYAA...';msg.textContent='';
+           try{
+             const {data,error}=await swdSupabase.functions.invoke('clever-processor',{body:{username,display_name,password}});
+             if(error)throw error;
+             if(!data||!data.ok)throw new Error(data&&data.error?data.error:'User lama abuuri karin.');
+             msg.style.color='#087f5b';msg.textContent='WAA LA ABUURAY! Username: '+data.username+' | Qofku hadda wuxuu ku geli karaa username-kan iyo password-ka aad siisay.';
+             document.getElementById('swdNewPassword').value='';
+           }catch(e){msg.style.color='#a11';msg.textContent='Cilad: '+(e.message||e)+'\nHubi in Supabase Edge Function clever-processor la geeyay.';}
+           finally{save.disabled=false;save.textContent='SAMEE USER';}
+         };
+       };
+     }
+     document.body.appendChild(bar);
      document.getElementById('swdBackupBtn').onclick=()=>document.getElementById('swdBackupFile').click();
      document.getElementById('swdBackupFile').onchange=async ev=>{const f=ev.target.files[0];if(!f)return;try{await importBackup(f);}catch(e){alert('Backup lama gelin: '+(e.message||e));}finally{ev.target.value='';}};
      document.getElementById('swdSyncBtn').onclick=()=>{scheduleCloudSave();alert('Sync ayaa la bilaabay.');};
