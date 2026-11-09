@@ -205,25 +205,28 @@ function drawCollectorReport(){
  const body=document.getElementById('collectorReportBody');if(!body)return;
  const zone=document.getElementById('collectorReportZone')?.value||'';const q=(document.getElementById('collectorReportSearch')?.value||'').toLowerCase().trim();
  const list=customers.filter(c=>(!zone||clean(c.zone)===zone)&&[c.SQN,c.name,c.address].join(' ').toLowerCase().includes(q)).sort((a,b)=>numericSort(a,b));
- body.innerHTML=list.map((c,i)=>{const ah=getPreviousReading(c),hh=hhValue(c);return `<tr data-sqn="${clean(c.SQN)}"><td>${i+1}</td><td>${clean(c.SQN)}</td><td>${clean(c.name)}</td><td>${clean(c.address)}</td><td class="cr-ah">${ah===''?'—':fmt(ah)}</td><td><input class="cr-ad cr-blank" type="number" min="0" step="0.01" inputmode="decimal" aria-label="AD cusub ${clean(c.SQN)}" placeholder="Geli AD" oninput="calculateCollectorRow(this)"></td><td class="cr-rate">$1.70</td><td class="cr-hh" data-value="${hh===null||hh===undefined||hh===''?'':Number(hh)}">${hh===null||hh===undefined||hh===''?'—':fmt(hh)}</td><td><input class="cr-money" type="text" value="—" readonly aria-label="Lacagta cusub si automatic ah loo xisaabiyey"></td><td><input class="cr-balance cr-money" type="text" value="—" readonly aria-label="Haraaga cusub HH iyo lacagta cusub la isku daray"></td><td></td></tr>`;}).join('')||'<tr><td colspan="11" class="empty">Macmiil lama helin.</td></tr>';
+ body.innerHTML=list.map((c,i)=>{const ah=getPreviousReading(c),rawHH=hhValue(c),hh=(rawHH===null||rawHH===undefined||rawHH===''?0:Number(rawHH));return `<tr data-sqn="${clean(c.SQN)}"><td>${i+1}</td><td>${clean(c.SQN)}</td><td>${clean(c.name)}</td><td>${clean(c.address)}</td><td class="cr-ah">${ah===''?'—':fmt(ah)}</td><td><input class="cr-ad cr-blank" type="number" min="0" step="0.01" inputmode="decimal" aria-label="AD cusub ${clean(c.SQN)}" placeholder="Geli AD" oninput="calculateCollectorRow(this)" onchange="calculateCollectorRow(this)"></td><td class="cr-rate">$1.70</td><td class="cr-hh" data-value="${hh}">$${money2(hh)}</td><td><input class="cr-money" type="text" value="—" readonly aria-label="Lacagta cusub si automatic ah loo xisaabiyey"></td><td><input class="cr-balance cr-money" type="text" value="—" readonly aria-label="Haraaga cusub HH iyo lacagta cusub la isku daray"></td><td></td></tr>`;}).join('')||'<tr><td colspan="11" class="empty">Macmiil lama helin.</td></tr>';
 }
 function calculateCollectorRow(input){
  const row=input.closest('tr');if(!row)return;
  const ahText=row.querySelector('.cr-ah')?.textContent.trim()||'';
- const amount=row.querySelector('.cr-money');
+ const amount=row.querySelector('td:nth-child(9) .cr-money');
  const balance=row.querySelector('.cr-balance');
  const hhCell=row.querySelector('.cr-hh');
  const raw=input.value.trim();
+ if(!amount||!balance)return;
  amount.classList.remove('cr-invalid');balance.classList.remove('cr-invalid');
  if(!raw){amount.value='—';balance.value='—';return;}
  if(ahText==='—'){amount.value='AH maqan';balance.value='—';amount.classList.add('cr-invalid');return;}
  const ah=Number(ahText.replace(/,/g,'')),ad=Number(raw);
  if(!Number.isFinite(ah)||!Number.isFinite(ad)||ad<ah){amount.value='AD < AH';balance.value='—';amount.classList.add('cr-invalid');return;}
- const hhRaw=hhCell?.dataset.value??'';
- if(hhRaw===''){amount.value=((ad-ah)*1.70).toFixed(2)+' $';balance.value='HH maqan';balance.classList.add('cr-invalid');return;}
- const hh=Number(hhRaw),newCharge=(ad-ah)*1.70;
- amount.value=newCharge.toFixed(2)+' $';
- balance.value=(hh+newCharge).toFixed(2)+' $';
+ const hhRaw=hhCell?.getAttribute('data-value');
+ const hh=(hhRaw===null||hhRaw===undefined||hhRaw===''?0:Number(hhRaw));
+ if(!Number.isFinite(hh)){amount.value='HH khaldan';balance.value='—';balance.classList.add('cr-invalid');return;}
+ const newCharge=Math.round(((ad-ah)*1.70+Number.EPSILON)*100)/100;
+ const newBalance=Math.round((hh+newCharge+Number.EPSILON)*100)/100;
+ amount.value='$'+newCharge.toFixed(2);
+ balance.value='$'+newBalance.toFixed(2);
 }
 
 function downloadCollectorReport(){
