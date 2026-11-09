@@ -758,9 +758,10 @@ let swdSupabase = null, swdUser = null, swdCloudTimer = null, swdHydrating = fal
      if(!profile||profile.active===false)throw new Error('Akoonka waa dansan yahay. La xiriir maamulka.');
      await loadCloud();
      gate.remove();
-     const bar=document.createElement('div');bar.style='position:fixed;right:12px;top:12px;bottom:auto;z-index:9999;background:#10243a;color:white;padding:8px 12px;border-radius:9px;font-size:12px;max-width:calc(100vw - 24px);display:flex;align-items:center;flex-wrap:wrap;gap:5px';
+     const bar=document.createElement('div');bar.style='position:static;z-index:20;background:#10243a;color:white;padding:7px 10px;border-radius:9px;font-size:12px;max-width:100%;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:5px;margin-left:auto;flex:0 1 auto';
      bar.innerHTML='ONLINE: '+String(profile.display_name||email).replace(/[<>&"]/g,'')+' <button id="swdBackupBtn" style="margin-left:8px;background:#1769aa;color:white;border:0;border-radius:6px;padding:6px">Soo geli Backup-ka</button><button id="swdSyncBtn" style="margin-left:5px;background:#1769aa;color:white;border:0;border-radius:6px;padding:6px">Sync</button><input id="swdBackupFile" type="file" accept=".json,application/json" hidden>';
-     document.body.appendChild(bar);
+     const tabsNav=document.querySelector('nav.tabs');
+     if(tabsNav){tabsNav.appendChild(bar);}else{document.body.appendChild(bar);}
      document.getElementById('swdBackupBtn').onclick=()=>document.getElementById('swdBackupFile').click();
      document.getElementById('swdBackupFile').onchange=async ev=>{const f=ev.target.files[0];if(!f)return;try{await importBackup(f);}catch(e){alert('Backup lama gelin: '+(e.message||e));}finally{ev.target.value='';}};
      document.getElementById('swdSyncBtn').onclick=()=>{scheduleCloudSave();alert('Sync ayaa la bilaabay.');};
