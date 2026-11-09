@@ -1,7 +1,5 @@
 // Supabase Edge Function: clever-processor
-// Replace the existing clever-processor code with this complete file, then Deploy.
-// Uses the current Supabase publishable/secret key environment variables.
-
+// Paste this complete code into Supabase > Edge Functions > clever-processor > Code.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -10,136 +8,120 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Return application errors as HTTP 200 so the app can display the exact
+// { ok: false, error: "..." } message instead of only "Edge Function returned non-2xx".
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-function readDefaultKey(jsonEnvName: string): string | null {
-  const raw = Deno.env.get(jsonEnvName);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    const value = parsed && typeof parsed === "object" ? parsed.default : null;
-    return typeof value === "string" && value.length > 0 ? value : null;
-  } catch {
-    console.error(`${jsonEnvName} is not valid JSON`);
-    return null;
-  }
-}
-
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 200, headers: corsHeaders });
-  }
-  if (req.method !== "POST") {
-    return reply({ ok: false, error: "Method not allowed." }, 405);
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return reply({ ok: false, error: "Habka codsiga sax ma aha. Isticmaal POST." });
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return reply({ ok: false, error: "Login ayaa loo baahan yahay." }, 401);
-  }
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  // New Supabase key variables are preferred; legacy variables are fallback only.
-  const publishableKey = readDefaultKey("SUPABASE_PUBLISHABLE_KEYS")
-    || Deno.env.get("SUPABASE_ANON_KEY");
-  const secretKey = readDefaultKey("SUPABASE_SECRET_KEYS")
-    || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-  if (!supabaseUrl || !publishableKey || !secretKey) {
-    console.error("Missing Supabase URL, publishable key, or secret key environment variable.");
-    return reply({ ok: false, error: "Supabase key-yada Function-ka lagama helin. Hubi Default secrets." }, 500);
-  }
-
-  // Verify the currently logged-in user using their JWT.
-  const callerClient = createClient(supabaseUrl, publishableKey, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: callerData, error: callerError } = await callerClient.auth.getUser();
-  if (callerError || !callerData.user) {
-    console.error("Caller authentication failed:", callerError?.message || "No user returned");
-    return reply({ ok: false, error: "Login-ka maamulka lama xaqiijin. Dib uga gal app-ka." }, 401);
-  }
-
-  // Use the server-only secret key for the protected profile lookup and Auth Admin API.
-  const admin = createClient(supabaseUrl, secretKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const { data: adminProfile, error: profileError } = await admin
-    .from("swd_profiles")
-    .select("role, active")
-    .eq("user_id", callerData.user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    console.error("Admin profile lookup failed:", profileError.message);
-    return reply({ ok: false, error: "Akhrinta profile-ka maamulka way fashilantay: " + profileError.message }, 500);
-  }
-  if (!adminProfile) {
-    console.error("No swd_profiles row found for authenticated admin user.");
-    return reply({ ok: false, error: "Profile-ka maamulka lama helin. Hubi user_id-ga swd_profiles." }, 403);
-  }
-  if (adminProfile.active === false) {
-    return reply({ ok: false, error: "Akoonka maamulka waa dansan yahay (active=false)." }, 403);
-  }
-  if (String(adminProfile.role || "").toLowerCase() !== "superadmin") {
-    console.error("User attempted admin action with role:", adminProfile.role);
-    return reply({ ok: false, error: "Kaliya Super Admin ayaa user cusub abuuri kara. Role-ka hadda jira: " + String(adminProfile.role || "NULL") }, 403);
-  }
-
-  let body: { username?: string; display_name?: string; password?: string };
   try {
-    body = await req.json();
-  } catch {
-    return reply({ ok: false, error: "Xogta la diray sax ma aha." }, 400);
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return reply({ ok: false, error: "Login ayaa loo baahan yahay. Dib uga gal maamulka." });
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !anonKey) {
+      console.error("Missing SUPABASE_URL or SUPABASE_ANON_KEY default secret");
+      return reply({ ok: false, error: "Supabase URL ama Anon Key lama helin. Hubi Default secrets." });
+    }
+    if (!serviceRoleKey) {
+      console.error("Missing SUPABASE_SERVICE_ROLE_KEY default secret");
+      return reply({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY lama helin. Hubi in Default secrets uu jiro; ha ku darin HTML ama GitHub." });
+    }
+
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: callerData, error: callerError } = await callerClient.auth.getUser();
+    if (callerError || !callerData.user) {
+      console.error("Admin auth verification failed:", callerError?.message);
+      return reply({ ok: false, error: "Login-ka maamulka lama xaqiijin. Dib uga bax app-ka kadibna dib u gal." });
+    }
+
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { data: adminProfile, error: profileError } = await admin
+      .from("swd_profiles")
+      .select("role, active")
+      .eq("user_id", callerData.user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Admin profile lookup failed:", profileError.message);
+      return reply({ ok: false, error: "Akhrinta swd_profiles way fashilantay: " + profileError.message });
+    }
+    if (!adminProfile) {
+      console.error("No swd_profiles row for authenticated user:", callerData.user.id);
+      return reply({ ok: false, error: "Akoonka maamulka lagama helin swd_profiles. Hubi user_id-ga profile-ka." });
+    }
+    if (adminProfile.active === false) {
+      return reply({ ok: false, error: "Akoonka maamulka waa inactive. Fadlan hubi active=true." });
+    }
+    if (String(adminProfile.role || "").toLowerCase() !== "superadmin") {
+      return reply({ ok: false, error: "Role-ka maamulka ma aha superadmin; role-ka la helay: " + String(adminProfile.role || "NULL") });
+    }
+
+    let body: { username?: string; display_name?: string; password?: string };
+    try {
+      body = await req.json();
+    } catch {
+      return reply({ ok: false, error: "Xogta la diray sax ma aha. Dib u geli username, magaca iyo password." });
+    }
+
+    const username = String(body.username || "").trim().toLowerCase();
+    const displayName = String(body.display_name || "").trim();
+    const password = String(body.password || "");
+
+    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+      return reply({ ok: false, error: "Username-ku ha noqdo 3–32 xaraf: a-z, 0-9, dhibic, _ ama -." });
+    }
+    if (!displayName) return reply({ ok: false, error: "Magaca qofka waa loo baahan yahay." });
+    if (password.length < 8) return reply({ ok: false, error: "Password-ku waa inuu ugu yaraan 8 xaraf ahaadaa." });
+
+    // Supabase Auth requires an email identifier. This reserved .invalid alias
+    // is internal only; the new user enters their username in the app.
+    const email = `${username}@swd-login.invalid`;
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { username, display_name: displayName },
+    });
+
+    if (createError || !created.user) {
+      console.error("Auth user creation failed:", createError?.message);
+      return reply({ ok: false, error: "Akoonka lama abuuri karin: " + (createError?.message || "Sabab aan la garanayn") });
+    }
+
+    const { error: insertError } = await admin.from("swd_profiles").insert({
+      user_id: created.user.id,
+      display_name: displayName,
+      role: "owner",
+      active: true,
+    });
+
+    if (insertError) {
+      console.error("Profile insert failed; rolling back new auth user:", insertError.message);
+      const { error: deleteError } = await admin.auth.admin.deleteUser(created.user.id);
+      if (deleteError) console.error("Rollback delete failed:", deleteError.message);
+      return reply({ ok: false, error: "Profile-ka user-ka lama abuuri karin: " + insertError.message });
+    }
+
+    return reply({ ok: true, username, display_name: displayName });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Unexpected clever-processor error:", message);
+    return reply({ ok: false, error: "Cilad gudaha Function-ka ah: " + message });
   }
-
-  const username = String(body.username || "").trim().toLowerCase();
-  const displayName = String(body.display_name || "").trim();
-  const password = String(body.password || "");
-
-  if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
-    return reply({ ok: false, error: "Username-ku ha noqdo 3–32 xaraf: a-z, 0-9, dhibic, _ ama -." }, 400);
-  }
-  if (!displayName || displayName.length > 80) {
-    return reply({ ok: false, error: "Magaca qofka waa loo baahan yahay (ugu badnaan 80 xaraf)." }, 400);
-  }
-  if (password.length < 8) {
-    return reply({ ok: false, error: "Password-ku waa inuu ugu yaraan 8 xaraf ahaadaa." }, 400);
-  }
-
-  // Supabase Auth requires an email/phone identifier; users still log in with username in the app.
-  const email = `${username}@swd-login.invalid`;
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { username, display_name: displayName },
-  });
-
-  if (createError || !created.user) {
-    console.error("Auth user creation failed:", createError?.message || "No user returned");
-    return reply({ ok: false, error: createError?.message || "Akoonka lama abuuri karin." }, 400);
-  }
-
-  const { error: insertError } = await admin.from("swd_profiles").insert({
-    user_id: created.user.id,
-    display_name: displayName,
-    role: "owner",
-    active: true,
-  });
-
-  if (insertError) {
-    console.error("New user profile insert failed:", insertError.message);
-    const { error: deleteError } = await admin.auth.admin.deleteUser(created.user.id);
-    if (deleteError) console.error("Cleanup of unprofiled Auth user failed:", deleteError.message);
-    return reply({ ok: false, error: "Profile-ka user-ka lama abuuri karin: " + insertError.message }, 500);
-  }
-
-  return reply({ ok: true, username, display_name: displayName });
 });
