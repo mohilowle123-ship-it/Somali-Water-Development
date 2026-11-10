@@ -116,7 +116,7 @@ body[data-theme="dark"] .generation-row .gen-data .balance-zero{color:#cbd5e1}
   <div class="collector-report-head"><div><h2>COLLECTOR REPORT</h2><p>Warqadda akhriska iyo lacag ururinta macaamiisha</p></div><div class="collector-report-rate">RATE: $1.70 / M³</div></div>
   <div class="toolbar no-print"><label>Dooro Zone <select id="collectorReportZone" onchange="drawCollectorReport()"><option value="">Dhammaan Zone-yada</option></select></label><input id="collectorReportSearch" placeholder="Raadi SQN ama magaca..." oninput="drawCollectorReport()"><button class="primary" onclick="window.print()">Daabac Report</button><button onclick="downloadCollectorReport()">Soo dejiso CSV</button></div>
   <div class="collector-report-note">AH = Akhriskii hore · AD = Akhriska cusub · HH = Haraaga hore ee app-ka. Geli AD; lacagta cusub = (AD − AH) × $1.70. Haraaga cusub = HH + lacagta cusub (HH taban wuxuu ka go'ayaa lacagta cusub).</div>
-  <div class="tablewrap collector-report-table"><table><thead><tr><th>#</th><th>SQN</th><th>Magaca Macmiilka</th><th>Address</th><th>AH</th><th>AD</th><th>Rate</th><th>HH ($)</th><th>Lacagta ($)</th><th>Haraaga cusub ($)</th><th>Saxiix</th></tr></thead><tbody id="collectorReportBody"></tbody></table></div>
+  <div class="tablewrap collector-report-table"><table><thead><tr><th>#</th><th>SQN</th><th>Magaca Macmiilka</th><th>Address</th><th>AH</th><th>AD</th><th>Rate</th><th>HH ($)</th><th>WD Guud (Excel)</th><th>Lacagta cusub ($)</th><th>Haraaga cusub ($)</th><th>Saxiix</th></tr></thead><tbody id="collectorReportBody"></tbody></table></div>
   <div class="collector-report-footer"><span>Magaca Collector: __________________________</span><span>Taariikh: __________________</span><span>Saxiix: __________________</span></div>
  </div>
 </section>
@@ -205,12 +205,12 @@ function drawCollectorReport(){
  const body=document.getElementById('collectorReportBody');if(!body)return;
  const zone=document.getElementById('collectorReportZone')?.value||'';const q=(document.getElementById('collectorReportSearch')?.value||'').toLowerCase().trim();
  const list=customers.filter(c=>(!zone||clean(c.zone)===zone)&&[c.SQN,c.name,c.address].join(' ').toLowerCase().includes(q)).sort((a,b)=>numericSort(a,b));
- body.innerHTML=list.map((c,i)=>{const ah=getPreviousReading(c),rawHH=hhValue(c),hh=(rawHH===null||rawHH===undefined||rawHH===''?0:Number(rawHH));return `<tr data-sqn="${clean(c.SQN)}"><td>${i+1}</td><td>${clean(c.SQN)}</td><td>${clean(c.name)}</td><td>${clean(c.address)}</td><td class="cr-ah">${ah===''?'—':fmt(ah)}</td><td><input class="cr-ad cr-blank" type="number" min="0" step="0.01" inputmode="decimal" aria-label="AD cusub ${clean(c.SQN)}" placeholder="Geli AD" oninput="calculateCollectorRow(this)" onchange="calculateCollectorRow(this)"></td><td class="cr-rate">$1.70</td><td class="cr-hh" data-value="${hh}">$${money2(hh)}</td><td><input class="cr-money" type="text" value="—" readonly aria-label="Lacagta cusub si automatic ah loo xisaabiyey"></td><td><input class="cr-balance cr-money" type="text" value="—" readonly aria-label="Haraaga cusub HH iyo lacagta cusub la isku daray"></td><td></td></tr>`;}).join('')||'<tr><td colspan="11" class="empty">Macmiil lama helin.</td></tr>';
+ body.innerHTML=list.map((c,i)=>{const ah=getPreviousReading(c),rawHH=hhValue(c),hh=(rawHH===null||rawHH===undefined||rawHH===''?0:Number(rawHH));return `<tr data-sqn="${clean(c.SQN)}"><td>${i+1}</td><td>${clean(c.SQN)}</td><td>${clean(c.name)}</td><td>${clean(c.address)}</td><td class="cr-ah">${ah===''?'—':fmt(ah)}</td><td><input class="cr-ad cr-blank" type="number" min="0" step="0.01" inputmode="decimal" aria-label="AD cusub ${clean(c.SQN)}" placeholder="Geli AD" oninput="calculateCollectorRow(this)" onchange="calculateCollectorRow(this)"></td><td class="cr-rate" data-rate="${Number(c.price)>0?Number(c.price):SWD_GENERATION_RATE}">$${money2(Number(c.price)>0?Number(c.price):SWD_GENERATION_RATE)}</td><td class="cr-hh" data-value="${hh}">$${money2(hh)}</td><td class="cr-wg">$${money2(Number(c.WG??c.waterGeneration??c.billed)||0)}</td><td><input class="cr-money" type="text" value="—" readonly aria-label="Lacagta cusub si automatic ah loo xisaabiyey"></td><td><input class="cr-balance cr-money" type="text" value="—" readonly aria-label="Haraaga cusub HH iyo lacagta cusub la isku daray"></td><td></td></tr>`;}).join('')||'<tr><td colspan="12" class="empty">Macmiil lama helin.</td></tr>';
 }
 function calculateCollectorRow(input){
  const row=input.closest('tr');if(!row)return;
  const ahText=row.querySelector('.cr-ah')?.textContent.trim()||'';
- const amount=row.querySelector('td:nth-child(9) .cr-money');
+ const amount=row.querySelector('td:nth-child(10) .cr-money');
  const balance=row.querySelector('.cr-balance');
  const hhCell=row.querySelector('.cr-hh');
  const raw=input.value.trim();
@@ -223,7 +223,8 @@ function calculateCollectorRow(input){
  const hhRaw=hhCell?.getAttribute('data-value');
  const hh=(hhRaw===null||hhRaw===undefined||hhRaw===''?0:Number(hhRaw));
  if(!Number.isFinite(hh)){amount.value='HH khaldan';balance.value='—';balance.classList.add('cr-invalid');return;}
- const newCharge=Math.round(((ad-ah)*1.70+Number.EPSILON)*100)/100;
+ const rate=Number(row.querySelector('.cr-rate')?.getAttribute('data-rate'))||SWD_GENERATION_RATE;
+ const newCharge=Math.round(((ad-ah)*rate+Number.EPSILON)*100)/100;
  const newBalance=Math.round((hh+newCharge+Number.EPSILON)*100)/100;
  amount.value='$'+newCharge.toFixed(2);
  balance.value='$'+newBalance.toFixed(2);
@@ -232,7 +233,7 @@ function calculateCollectorRow(input){
 function downloadCollectorReport(){
  const zone=document.getElementById('collectorReportZone')?.value||'';
  const rows=[...document.querySelectorAll('#collectorReportBody tr[data-sqn]')];
- csv(rows.map((tr,i)=>({'#':i+1,'SQN':tr.dataset.sqn,'Magaca':tr.children[2].textContent,'Address':tr.children[3].textContent,'AH':tr.querySelector('.cr-ah').textContent,'AD':tr.querySelector('.cr-ad').value,'Rate':'1.70','HH':tr.querySelector('.cr-hh').textContent,'Lacagta cusub':tr.querySelectorAll('.cr-money')[0].value,'Haraaga cusub':tr.querySelector('.cr-balance').value,'Saxiix':''})),'collector-report'+(zone?'-'+zone:'')+'.csv');
+ csv(rows.map((tr,i)=>({'#':i+1,'SQN':tr.dataset.sqn,'Magaca':tr.children[2].textContent,'Address':tr.children[3].textContent,'AH':tr.querySelector('.cr-ah').textContent,'AD':tr.querySelector('.cr-ad').value,'Rate':tr.querySelector('.cr-rate')?.textContent.replace('$','')||'1.70','HH':tr.querySelector('.cr-hh').textContent,'WD Guud (Excel)':tr.querySelector('.cr-wg')?.textContent||'','Lacagta cusub':tr.querySelectorAll('.cr-money')[0].value,'Haraaga cusub':tr.querySelector('.cr-balance').value,'Saxiix':''})),'collector-report'+(zone?'-'+zone:'')+'.csv');
 }
 
 function setupZones(){let z=[...new Set(customers.map(c=>clean(c.zone)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));document.getElementById('zone').innerHTML='<option value="">Dhammaan Zone-yada</option>'+z.map(x=>`<option>${x}</option>`).join('');const zoneListEl=document.getElementById('zoneList');if(zoneListEl)zoneListEl.innerHTML=z.map(x=>`<option value="${x}">`).join('');document.getElementById('sqnList').innerHTML=customers.map(c=>`<option value="${clean(c.SQN)}">${clean(c.name)}</option>`).join('');}
@@ -278,8 +279,9 @@ function getPreviousReading(c){
 }
 const SWD_GENERATION_RATE = 1.70;
 function getCustomerRate(c){
- // Generation billing uses one fixed tariff for every customer and Zone.
- return SWD_GENERATION_RATE;
+ // Use the imported Excel Qiimo for this customer; fall back to $1.70 only when blank.
+ const rate=Number(c&&c.price);
+ return Number.isFinite(rate)&&rate>0?rate:SWD_GENERATION_RATE;
 }
 
 // Version 2 correction: older imported customer records often have no billHistory.
@@ -294,6 +296,15 @@ function migrateOutstandingBillsTo170(){
    const history=Array.isArray(c.billHistory)?c.billHistory:[];
    if(c.unbilled){
      c[marker]=true;
+     return;
+   }
+   // Excel records already contain the authoritative WG (water generation total),
+   // which includes the HH adjustment. Never overwrite it with raw m3 x rate.
+   if((c.WG!==undefined&&c.WG!==null&&c.WG!=='') || (c.waterGeneration!==undefined&&c.waterGeneration!==null&&c.waterGeneration!=='')){
+     c.billed=billMoney(Number(c.WG??c.waterGeneration));
+     c.price=Number(c.price)>0?Number(c.price):SWD_GENERATION_RATE;
+     c[marker]=true;
+     syncCustomerBalance(c);
      return;
    }
    let updatedHistory=false,oldActiveTotal=0,newActiveTotal=0;
@@ -371,7 +382,7 @@ function loadZoneBillRows(){
 function billMoney(value){return Math.round((Number(value)+Number.EPSILON)*100)/100;}
 function calcZoneRow(input){
  let tr=input.closest('tr'),oldText=tr.querySelector('.old-reading').textContent.trim();
- let ah=oldText===''?null:Number(oldText),raw=input.value,ad=raw===''?null:Number(raw),rate=SWD_GENERATION_RATE;
+ let ah=oldText===''?null:Number(oldText),raw=input.value,ad=raw===''?null:Number(raw),sqn=tr.dataset.sqn,c=customers.find(x=>String(x.SQN)===String(sqn))||DATA.customers.find(x=>String(x.SQN)===String(sqn)),rate=getCustomerRate(c);
  let diff=(ad===null||ah===null||!Number.isFinite(ad)||!Number.isFinite(ah)||ad<ah)?null:billMoney(ad-ah);
  let bill=(diff===null||!(rate>0))?null:billMoney(diff*rate);
  tr.querySelector('.diff-cell').textContent=raw!==''&&diff===null?'AD < AH':(diff===null?'0':diff.toFixed(2));
@@ -381,7 +392,7 @@ function calcZoneRow(input){
  let total=[...document.querySelectorAll('#billPreview tbody tr')].reduce((sum,row)=>{
    let v=row.querySelector('.new-reading').value,old=row.querySelector('.old-reading').textContent.trim();
    if(v===''||old==='')return sum;
-   let adValue=Number(v),ahValue=Number(old),r=SWD_GENERATION_RATE;
+   let adValue=Number(v),ahValue=Number(old),sqn=row.dataset.sqn,c=customers.find(x=>String(x.SQN)===String(sqn))||DATA.customers.find(x=>String(x.SQN)===String(sqn)),r=getCustomerRate(c);
    if(!Number.isFinite(adValue)||!Number.isFinite(ahValue)||adValue<ahValue||!(r>0))return sum;
    return sum+billMoney((adValue-ahValue)*r);
  },0);
@@ -482,11 +493,63 @@ function applyPermissions(perms){document.querySelectorAll('.tab[data-tab]').for
 function removeCollector(id){if(confirm('Ma tirtiraysaa qofkan?')){collectors=collectors.filter(c=>c.id!==id);persistCollectors();drawCollectors();}}
 function deleteAllCustomers(){if(!confirm('DIGNIIN: Ma tirtiraysaa DHAMMAAN macaamiisha iyo lacag-bixinnadooda browser-kan?'))return;if(!confirm('Xaqiijin labaad: hawshan dib looma celin karo.'))return;customers=[];appointments=[];saveAll();setupZones();refreshZoneControls();drawAll();refreshZoneControls();alert('Dhammaan xogta macaamiisha waa la tirtiray.');}
 function downloadTemplate(){csv([{'SQN':'1001','Customer Name':'Magaca macmiilka','Zone':'L9','Address':'12A','Tel':'610000000','AH':100,'AD':110,'Farqiga':10,'Qiimo':1.7,'Lacagta':17}],'SOMALI-WATER-IMPORT-TEMPLATE.csv');}
-function importExcel(){let f=document.getElementById('excelFile').files[0];if(!f){alert('Dooro Excel file.');return;}let reader=new FileReader();reader.onload=e=>{try{let rows;if(f.name.toLowerCase().endsWith('.csv')){let txt=e.target.result,lines=txt.replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean),headers=lines.shift().split(',').map(x=>x.replace(/^"|"$/g,''));rows=lines.map(line=>{let vals=line.match(/("([^"]|"")*"|[^,]*)(,|$)/g)||[];let a=vals.map(v=>v.replace(/,$/,'').replace(/^"|"$/g,'').replace(/""/g,'"'));return Object.fromEntries(headers.map((h,i)=>[h,a[i]||'']));});}else{if(!window.XLSX)throw Error('Excel reader ma soo degin. Internet ku xir ama CSV isticmaal.');let wb=XLSX.read(e.target.result,{type:'array'});rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});}
-const norm=x=>String(x??'').trim().toLowerCase().replace(/[\s_\-]/g,'');const pick=(r,names)=>{let k=Object.keys(r).find(k=>names.includes(norm(k)));return k===undefined?'':r[k];};let incoming=rows.map(r=>{let sqn=pick(r,['sqn','customerid','id']),name=pick(r,['customername','name','macmiil']),zone=pick(r,['zone']),address=pick(r,['address']),tel=pick(r,['tel','telephone','phone']),ah=pick(r,['ah','previousreading']),ad=pick(r,['ad','currentreading']),diff=pick(r,['farqiga','difference']),price=pick(r,['qiimo','price','unitprice']),bill=pick(r,['lacagta','billed','amount']);if(!sqn||!name||!zone)return null;ah=ah===''?null:Number(ah);ad=ad===''?null:Number(ad);diff=diff===''?(ah!=null&&ad!=null?ad-ah:null):Number(diff);price=Number(price)||1.7;bill=bill===''?(diff!=null?Math.max(0,diff*price):0):Number(bill);return {SQN:String(sqn).trim(),name:String(name).trim(),zone:String(zone).trim(),address:String(address||''),tel:String(tel||'').replace(/\.0$/,''),ah,ad,difference:diff,price,billed:bill,paid:0,balance:bill,ahTime:'',adTime:'',unbilled:bill<=0,billNo:null,payments:[]};}).filter(Boolean);if(!incoming.length)throw Error('Xog sax ah lama helin. Hubi tiirarka SQN, Customer Name iyo Zone.');const mode=document.getElementById('importMode').value;let added=0,updated=0,skipped=0;if(mode==='replace'){if(!confirm('DIGNIIN: Tani waxay beddelaysaa dhammaan xogta macaamiisha ee app-ka. Marka hore Backup samee. Ma hubtaa inaad sii waddo?'))return;customers=incoming;added=incoming.length;}else{let m=new Map(customers.map(c=>[String(c.SQN),c]));incoming.forEach(c=>{let old=m.get(c.SQN);if(mode==='add'){if(old){skipped++;}else{m.set(c.SQN,c);added++;}}else{if(old){m.set(c.SQN,{...old,...c,paid:old.paid||0,payments:old.payments||[],balance:billMoney(c.billed-(old.paid||0))});updated++;}else{m.set(c.SQN,c);added++;}}});customers=[...m.values()];}customers.forEach(syncCustomerBalance);customers.sort((a,b)=>clean(a.zone).localeCompare(clean(b.zone),undefined,{numeric:true})||numericSort(a,b));saveAll();setupZones();refreshZoneControls();drawAll();alert(`Excel waa la soo geliyey.
-Cusub: ${added}
-La cusboonaysiiyey: ${updated}
-Laga booday (hore u jiray): ${skipped}`);}catch(err){alert('Import wuu fashilmay: '+err.message);}};if(f.name.toLowerCase().endsWith('.csv'))reader.readAsText(f);else reader.readAsArrayBuffer(f);}
+function importExcel(){
+ const f=document.getElementById('excelFile').files[0];
+ if(!f){alert('Dooro Excel file.');return;}
+ const reader=new FileReader();
+ reader.onload=e=>{try{
+  let rows;
+  const norm=x=>String(x??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\s_\-./()]+/g,'');
+  const parseNum=v=>{if(v===null||v===undefined||String(v).trim()==='')return null;if(typeof v==='number')return Number.isFinite(v)?v:null;let s=String(v).trim().replace(/[$,\s]/g,'');if(/^\(.*\)$/.test(s))s='-'+s.slice(1,-1);const n=Number(s);return Number.isFinite(n)?n:null;};
+  if(f.name.toLowerCase().endsWith('.csv')){
+   const txt=String(e.target.result||'').replace(/^\uFEFF/,'');
+   const parseCSVLine=line=>{let out=[],v='',q=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'&&line[i+1]==='"'&&q){v+='"';i++;}else if(ch==='"'){q=!q;}else if(ch===','&&!q){out.push(v);v='';}else v+=ch;}out.push(v);return out;};
+   const lines=txt.split(/\r?\n/).filter(x=>x.trim()!=='');if(!lines.length)throw Error('CSV-gu waa madhan.');
+   const headers=parseCSVLine(lines.shift()).map(x=>x.trim());rows=lines.map(line=>{const a=parseCSVLine(line);return Object.fromEntries(headers.map((h,i)=>[h,a[i]??'']));});
+  }else{
+   if(!window.XLSX)throw Error('Excel reader ma soo degin. Internet ku xir ama CSV isticmaal.');
+   const wb=XLSX.read(e.target.result,{type:'array',cellDates:false});
+   const sheet=wb.Sheets[wb.SheetNames[0]];if(!sheet)throw Error('Excel sheet lama helin.');
+   rows=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,blankrows:false});
+  }
+  const aliases={
+   sqn:['sqn','customerid','id'],name:['customername','name','macmiil'],zone:['zone'],address:['address'],tel:['tel','telephone','phone'],
+   ah:['ah','previousreading','akhriskahore'],ad:['ad','currentreading','akhriskadambe'],diff:['farqii','farqiga','farqi','difference','diff'],
+   price:['qiimo','price','unitprice','rate'],invoice:['lacagta','lacag','invoiceamount','invoice','amount'],
+   hh:['hh','hhadjustment'],wg:['wg','wdguud','watergeneration','watergenerated','collectorhaara'],
+   paid:['dhiibay','paid','paidamount'],billNo:['bno','billno','billnumber','biilno']
+  };
+  const pick=(r,key)=>{const keys=Object.keys(r);const wanted=aliases[key];const k=keys.find(x=>wanted.includes(norm(x)));return k===undefined?'':r[k];};
+  const incoming=rows.map(r=>{
+   const sqn=pick(r,'sqn'),name=pick(r,'name'),zone=pick(r,'zone');if(String(sqn).trim()===''||String(name).trim()===''||String(zone).trim()==='')return null;
+   const ah=parseNum(pick(r,'ah')),ad=parseNum(pick(r,'ad'));
+   const diffExcel=parseNum(pick(r,'diff')),diff=diffExcel!==null?diffExcel:(ah!==null&&ad!==null?billMoney(ad-ah):null);
+   const rate=parseNum(pick(r,'price'));const price=rate!==null&&rate>0?rate:SWD_GENERATION_RATE;
+   const invoice=parseNum(pick(r,'invoice'));
+   const hh=parseNum(pick(r,'hh'));
+   const wgExcel=parseNum(pick(r,'wg'));
+   const wg=wgExcel!==null?billMoney(wgExcel):(invoice!==null?billMoney(invoice+(hh||0)):(diff!==null?billMoney(diff*price+(hh||0)):0));
+   const billed=wg;
+   const paid=parseNum(pick(r,'paid'))||0;
+   const billNo=pick(r,'billNo');
+   return {SQN:String(sqn).trim(),name:String(name).trim(),zone:String(zone).trim(),address:String(pick(r,'address')||''),tel:String(pick(r,'tel')||'').replace(/\.0$/,''),ah,ad,difference:diff,price,billed,invoiceAmount:invoice,hhAdjustment:hh,HH:hh,waterGeneration:wg,WG:wg,collectorAH:ad,collectorHaara:wg,collectorBNo:String(billNo||'').trim()||null,dhiibayFromExcel:pick(r,'paid')||null,paid,balance:billMoney(billed-paid),ahTime:'',adTime:'',unbilled:billed<=0,billNo:String(billNo||'').trim()||null,payments:[],swdRate170OutstandingMigrationV2:true};
+  }).filter(Boolean);
+  if(!incoming.length)throw Error('Xog sax ah lama helin. Hubi tiirarka SQN, Customer Name iyo Zone.');
+  const mode=document.getElementById('importMode').value;let added=0,updated=0,skipped=0;
+  if(mode==='replace'){
+   if(!confirm('DIGNIIN: Tani waxay beddelaysaa dhammaan xogta macaamiisha ee app-ka. Marka hore Backup samee. Ma hubtaa inaad sii waddo?'))return;
+   customers=incoming;added=incoming.length;
+  }else{
+   const m=new Map(customers.map(c=>[String(c.SQN),c]));
+   incoming.forEach(c=>{const old=m.get(c.SQN);if(mode==='add'&&old){skipped++;return;}if(old){m.set(c.SQN,{...old,...c,paid:old.paid||0,payments:old.payments||[],balance:billMoney(c.billed-(old.paid||0))});updated++;}else{m.set(c.SQN,c);added++;}});
+   customers=[...m.values()];
+  }
+  customers.forEach(syncCustomerBalance);customers.sort((a,b)=>clean(a.zone).localeCompare(clean(b.zone),undefined,{numeric:true})||numericSort(a,b));
+  saveAll();setupZones();refreshZoneControls();drawAll();
+  alert(`Excel waa la soo geliyey.\nCusub: ${added}\nLa cusboonaysiiyey: ${updated}\nLaga booday (hore u jiray): ${skipped}\nHH, WG Guud, Qiimo, Lacagta iyo B.NO waa la akhriyey.`);
+ }catch(err){alert('Import wuu fashilmay: '+err.message);}};
+ if(f.name.toLowerCase().endsWith('.csv'))reader.readAsText(f);else reader.readAsArrayBuffer(f);
+}
 
 setupZones();refreshZoneControls();drawCollectors();drawAll();
 function drawBilled(){let q=(document.getElementById('billedSearch')?.value||'').toLowerCase(),z=document.getElementById('billedZone')?.value||'',arr=customers.filter(c=>!c.unbilled&&(!z||clean(c.zone)===z)&&[c.SQN,c.name,c.zone,c.address].join(' ').toLowerCase().includes(q)).sort((a,b)=>clean(a.zone).localeCompare(clean(b.zone),undefined,{numeric:true})||numericSort(a,b));document.getElementById('billedBody').innerHTML=arr.map(c=>`<tr><td>${c.SQN}</td><td>${c.name}</td><td>${c.zone}</td><td>${c.address}</td><td>${hhText(c)}</td><td>${fmt(c.billed)} $</td><td>${fmt(c.paid)} $</td><td>${balanceText(syncCustomerBalance(c))}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Macmiil la dalacay lama helin.</td></tr>';}
